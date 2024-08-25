@@ -1,0 +1,25 @@
+services:
+  etheralis-service:
+    image: etheralis-system
+    build:
+      context: .
+      dockerfile: Dockerfile
+    runtime: nvidia
+    environment:
+      - CUDA_VISIBLE_DEVICES=0  # If you want to specify a GPU device
+      - ENABLE_MJPG_STREAMER=true
+    volumes:
+      - ./data:/app/data
+    devices:
+      - /dev/video0:/dev/video0
+      - /dev/video1:/dev/video1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    command: ["python3", "src/faceRec.py"]
+
+volumes:
+  data:
+    driver: local
