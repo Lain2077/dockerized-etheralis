@@ -3,29 +3,56 @@ FROM nvidia/cuda:12.1.1-runtime-ubuntu20.04
 
 # Set the working directory
 WORKDIR /app
+ARG OPENCV_VERSION=4.7.0
 
-
-# Install necessary packages
-RUN apt-get update && apt-get install -y \
-    software-properties-common \
-    && add-apt-repository ppa:deadsnakes/ppa \
-    && apt-get update && apt-get install -y \
+# Update and upgrade packages, then install necessary dependencies
+RUN apt-get update && apt-get upgrade -y && \
+    # Install software-properties-common to manage PPAs
+    apt-get install -y software-properties-common && \
+    # Add the deadsnakes PPA for newer Python versions
+    add-apt-repository ppa:deadsnakes/ppa && \
+    # Update package lists after adding new PPA
+    apt-get update && \
+    # Install Python 3.11 and other necessary packages
+    apt-get install -y \
     python3.11 \
     python3.11-dev \
     python3.11-distutils \
     python3.11-venv \
-    wget \
-    curl \
+    python3-pip \
     build-essential \
     cmake \
     git \
-    avahi-daemon \
+    wget \
+    curl \
+    unzip \
+    yasm \
+    pkg-config \
+    libswscale-dev \
+    libtbb2 \
+    libtbb-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libtiff-dev \
+    libavformat-dev \
+    libpq-dev \
+    libxine2-dev \
+    libglew-dev \
+    libtiff5-dev \
+    zlib1g-dev \
+    libavcodec-dev \
+    libavutil-dev \
+    libpostproc-dev \
+    libeigen3-dev \
+    libgtk2.0-dev \
     libgl1-mesa-glx \
     libavahi-common3 \
     libavahi-client-dev \
+    avahi-daemon \
     && rm -rf /var/lib/apt/lists/*
 
-RUN systemctl enable --now avahi-daemon
+
+RUN service avahi-daemon start
 
 # Upgrade CMake to version 3.24 or higher
 RUN wget https://cmake.org/files/v3.24/cmake-3.24.3-linux-x86_64.tar.gz \
@@ -74,10 +101,37 @@ RUN cd /app/ndi-python \
 RUN pip3 install /app/ndi-python/dist/*.whl
     
 # Download and install the CUDA-optimized OpenCV wheel
-RUN wget https://github.com/cudawarped/opencv-python-cuda-wheels/releases/download/4.7.0.20230527/opencv_contrib_python_rolling-4.7.0.20230527-cp36-abi3-linux_x86_64.whl -O opencv_contrib_python_rolling-4.7.0.20230527-cp36-abi3-linux_x86_64.whl && \
-    ls -lh opencv_contrib_python_rolling-4.7.0.20230527-cp36-abi3-linux_x86_64.whl && \
-    pip install opencv_contrib_python_rolling-4.7.0.20230527-cp36-abi3-linux_x86_64.whl && \
-    rm opencv_contrib_python_rolling-4.7.0.20230527-cp36-abi3-linux_x86_64.whl
+#RUN wget https://github.com/cudawarped/opencv-python-cuda-wheels/releases/download/4.7.0.20230527/opencv_contrib_python_rolling-4.7.0.20230527-cp36-abi3-linux_x86_64.whl -O opencv_contrib_python_rolling-4.7.0.20230527-cp36-abi3-linux_x86_64.whl && \
+#    ls -lh opencv_contrib_python_rolling-4.7.0.20230527-cp36-abi3-linux_x86_64.whl && \
+#    pip install opencv_contrib_python_rolling-4.7.0.20230527-cp36-abi3-linux_x86_64.whl && \
+#    rm opencv_contrib_python_rolling-4.7.0.20230527-cp36-abi3-linux_x86_64.whl
+
+RUN cd /opt/ &&\
+    # Download and unzip OpenCV and opencv_contrib and delte zip files
+    wget https://github.com/opencv/opencv/archive/$OPENCV_VERSION.zip &&\
+    unzip $OPENCV_VERSION.zip &&\
+    rm $OPENCV_VERSION.zip &&\
+    wget https://github.com/opencv/opencv_contrib/archive/$OPENCV_VERSION.zip &&\
+    unzip ${OPENCV_VERSION}.zip &&\
+    rm ${OPENCV_VERSION}.zip &&\
+    # Create build folder and switch to it
+    mkdir /opt/opencv-${OPENCV_VERSION}/build && cd /opt/opencv-${OPENCV_VERSION}/build &&\
+    # Cmake configure
+    cmake \
+        -DOPENCV_EXTRA_MODULES_PATH=/opt/opencv_contrib-${OPENCV_VERSION}/modules \
+        -DWITH_CUDA=ON \
+        -DCUDA_ARCH_BIN=7.5,8.0,8.6 \
+        -DCMAKE_BUILD_TYPE=RELEASE \
+        # Install path will be /usr/local/lib (lib is implicit)
+        -DCMAKE_INSTALL_PREFIX=/usr/local \
+        .. &&\
+    # Make
+    make -j"$(nproc)" && \
+    # Install to /usr/local/lib
+    make install && \
+    ldconfig &&\
+    # Remove OpenCV sources and build folder
+    rm -rf /opt/opencv-${OPENCV_VERSION} && rm -rf /opt/opencv_contrib-${OPENCV_VERSION}
 
 
 # Copy the necessary files
@@ -94,10 +148,10 @@ ENV CUDA_HOME=/usr/local/cuda
 
 
 # Create and switch to non-root user
-RUN adduser -u 5678 --disabled-password --gecos "" appuser && \
-    adduser appuser video && \
-    chown -R appuser /app
-USER appuser
+#RUN adduser -u 5678 --disabled-password --gecos "" appuser && \
+#    adduser appuser video && \
+#    chown -R appuser /app
+#USER appuser
 
 # Command to run the application
 CMD ["python3", "src/faceRec.py"]

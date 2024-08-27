@@ -15,19 +15,59 @@ from PIL import Image
 import numpy as np
 import requests
 
+import time
+
+
+ndi_find = ndi.find_create_v2()
+
+source_name_substring = 'TouchDesigner'
+chosen_source_index = None
+
+sources = []
+while not len(sources) > 0:
+    print('Looking for sources ...')
+    ndi.find_wait_for_sources(ndi_find, 1000)
+    sources = ndi.find_get_current_sources(ndi_find)
+
+print(sources)
+    
+for index, source in enumerate(sources):
+    print(dir(source))  # Lists all attributes and methods
+    print(source.ndi_name)
+    if source_name_substring in source.ndi_name:
+        print(source.ndi_name)
+        print(index)
+        time.sleep(3)
+        chosen_source_index = index
+
+if chosen_source_index is None:
+    raise Exception(f"Source '{source_name}' not found")
+
+ndi_recv_create = ndi.RecvCreateV3()
+ndi_recv_create.color_format = ndi.RECV_COLOR_FORMAT_BGRX_BGRA
+
+ndi_recv = ndi.recv_create_v3(ndi_recv_create)
+
+ndi.recv_connect(ndi_recv, sources[chosen_source_index])
+
+ndi.find_destroy(ndi_find)
+
+cv2.startWindowThread()
+print(ndi_recv)
+time.sleep(3)
+
+
 #CONFIG======================================================
 
-cv_show_render = True
+cv_show_render = False
 input_width = 1920
 input_height = 1080
 
 output_width = 1920
 output_height = 1080
 
-dataset_folder = '/app/data'
+dataset_folder = 'data'
 camera_id = 1
-
-source_name = 'TouchDesigner' 
 
 #SPECIFIFIC USECASES FUNCTIONS================================
 
@@ -110,7 +150,7 @@ def display_log(known_faces, detected_faces_count, status, opencv_device, torch_
     reset = "\033[0m"
     # Move cursor up six lines to overwrite the existing content
     print("\033[6A", end="\r")  # Move up six lines to include the title
-    print("\033[K" + bold_underline + "FaceRec" + reset, end="\r\n")  # Clear line and print title
+    print("\033[K" + bold_underline + "ETHERALIS --- FACE RECOGNITION SYSTEM" + reset, end="\r\n")  # Clear line and print title
     print("\033[K" + green + "Known faces in frame: " + reset + ', '.join(known_faces), end="\r\n")  # Clear line and print
     print("\033[K" + yellow + "Detected faces in frame: " + reset + str(detected_faces_count), end="\r\n")  # Clear line and print
     print("\033[K" + pink + "Status: " + reset + status, end="\r\n")  # Clear line and print
@@ -288,7 +328,7 @@ def init_face_presence(directory=dataset_folder):
 
 face_presence = init_face_presence()
 
-print(face_presence)
+#print(face_presence)
 
 # OSC VALUES INITIATION ============================================
 for name in face_presence.keys():
@@ -316,12 +356,20 @@ load_data = torch.load('data.pt')
 embedding_list = load_data[0] 
 name_list = load_data[1] 
 
-# MAIN LOOP =======================================================
-while cap.isOpened():
+#ndi_recv = init_ndi()
 
-    ret, frame = cap.read()
-    if not ret:
-        break
+# MAIN LOOP =======================================================
+while True:
+
+    t, v, _, _ = ndi.recv_capture_v2(ndi_recv, 5000)
+
+    if t == ndi.FRAME_TYPE_VIDEO:
+        print('Video data received (%dx%d).' % (v.xres, v.yres))
+        frame = np.copy(v.data)
+        ndi.recv_free_video_v2(ndi_recv, v)
+        
+    #if not frame:
+    #    break
 
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 

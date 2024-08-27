@@ -10,16 +10,24 @@ services:
       - ENABLE_MJPG_STREAMER=true
     volumes:
       - ./data:/app/data
-    devices:
-      - /dev/video0:/dev/video0
-      - /dev/video1:/dev/video1
     deploy:
       resources:
         reservations:
           devices:
             - capabilities: [gpu]
     command: ["python3", "src/faceRec.py"]
+    networks:
+      etheralis-network:
+        ipv4_address: 192.168.1.99  # Chosen static IP address for this container
+    dns:
+      - 8.8.4.4  # DNS Server (Router IP)
 
-volumes:
-  data:
-    driver: local
+networks:
+  etheralis-network:
+    driver: macvlan
+    driver_opts:
+      parent: eth0  # Replace with the correct network interface if needed
+    ipam:
+      config:
+        - subnet: 192.168.1.0/24
+          gateway: 192.168.1.1  # Router's IP address
